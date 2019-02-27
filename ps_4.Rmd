@@ -1,0 +1,172 @@
+---
+title: 'Problem Set #4'
+author: "Taehwan Kim"
+date: "2/26/2019"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(knitr)
+library(gt)
+library(ggplot2)
+
+poll <- read.csv("ps_4_elections-poll-nc09-3.csv") %>% 
+  filter(response != "3")
+
+# Convert timestamp from factor to POSIXct to calculate timestamp
+poll$timestamp <- as.POSIXct(strptime(x = as.character(poll$timestamp),
+                                format = "%Y-%m-%d %H:%M:%S"))
+```
+
+```{r }
+
+# Find who voted Democrats
+dem_support <- poll %>% 
+  select(response) %>% 
+  filter(response == "Dem") %>% 
+  count()
+
+# Find how many more voted Republican than Undecided
+more_rep <- poll %>% 
+  select(response) %>% 
+  filter(response %in% c("Rep", "Und")) %>% 
+  group_by(response) %>% 
+  summarize(votes = n()) %>% 
+  spread(key = response, value = votes) %>% 
+  summarize(diff = Rep - Und)
+
+# Find mismatch in gender and gender_combined
+gender_diff <- poll %>%
+  select(gender, gender_combined) %>% 
+  filter(gender != gender_combined) %>% 
+  count()
+
+# Fined people who was white in race_eth bu not in file_race_black
+white_diff <- poll %>% 
+  select(race_eth, file_race_black) %>% 
+  filter(race_eth == "White" & file_race_black != "White") %>% 
+  count()
+
+# Find response time for Republicans, arranged by earliest to latest
+quickest_rep <- poll %>% 
+  select(response, timestamp) %>% 
+  filter(response == "Rep") %>% 
+  arrange(timestamp) %>% 
+  select(timestamp)
+
+# Find response time for Democrats, arranged by earliest to latest
+quickest_dem <- poll %>% 
+  select(response, timestamp) %>% 
+  filter(response == "Dem") %>% 
+  arrange(timestamp) %>% 
+  select(timestamp)
+  
+# Find the gap in the response times of the two
+response_gap <-
+  round(quickest_rep[1,1] - quickest_dem[1,1])
+
+
+```
+
+# Question 1
+
+There were `r dem_support` respondents who supported the Democratic candidate.
+
+There were `r more_rep` more respondents who favored the Republican candidate than who were Undecided.
+
+There are two gender variables (gender and gender_combined). There are `r gender_diff` individuals for whom these variables have different values.
+
+There are `r white_diff` respondents listed as “White” under race_eth who are not listed as “White” under file_race_black.
+
+The first response of Dem came `r response_gap` minutes (rounded to the nearest minute) before the first response of Rep
+
+# Question 2
+
+```{r }
+# Selects necessary data
+table <- poll %>% 
+  filter(response %in% c("Dem", "Rep", "Und")) %>% 
+  filter(response != "3") %>% 
+  select(race_eth, response, final_weight) %>% 
+  filter(race_eth !=  "[DO NOT READ] Don't know/Refused") %>%
+  group_by(race_eth, response) %>% 
+  summarize(total = sum(final_weight)) %>% 
+  spread(key = response, value = total) %>% 
+  replace_na(list(Und = 0)) %>% 
+  mutate(all = Dem + Rep + Und) %>% 
+  mutate(Dem = Dem / all) %>% 
+  mutate(Rep = Rep / all) %>% 
+  mutate(Und = Und / all) %>% 
+  select(-all) %>%
+  arrange(order(c("White","Black","Hispanic","Asian","Other")))
+
+# Somehow it prints two lines for each line -- study halls were not able to help
+gt(table) %>%
+  tab_header(title = "Voting by Race in North Carolina’s 9th Congressional District") %>%
+  tab_footnote(locations = cells_title(groups = "title"), footnote
+               = "Source: NYT") %>%
+  cols_label(Dem = "DEM.",
+            Rep = "REP.",
+            Und = "UND.") %>%
+  fmt_percent(columns = vars(Dem, Rep, Und), decimals = 0) %>%
+  na_if(0) %>%
+  fmt_missing(columns = vars(Und), rows = 4, missing_text = "-")
+```
+
+# Question 3
+``` {r }
+# Graphs violin plot
+poll %>% 
+  
+  # Select necessary data
+  select(educ, final_weight) %>% 
+  filter(educ !=  "[DO NOT READ] Refused") %>% 
+  
+  # Plot violin and jitter chart
+  ggplot(aes(x = educ, y = final_weight)) + 
+  scale_x_discrete(limits = rev(c("Graduate or Professional Degree",
+                  "Bachelors' degree",
+                  "Some college or trade school",
+                  "High school",
+                  "Grade school"))) +
+  coord_flip() +
+  geom_violin() +
+  geom_jitter(alpha = .5, size = 0.8, width = .2) +
+  
+  # Label graph
+  ylab("Weight Given to Respondent in Calculating Poll Results") +
+  xlab("") +
+  labs(title = "More Educated Matter Less in North Carolina 9th",
+      subtitle = "Poll gives more weight to people who are less likely to participate in polls",
+      caption = "New York Times Upshot/Siena College 2018 live Polls") 
+  
+
+```
+
+# Question 4
+
+```{r}
+# Create stacked bar graph to show percentage of gender by response
+poll %>% 
+  # Select necessary data
+  select(response, gender) %>% 
+  group_by(response,gender) %>% 
+  summarize(count = n()) %>% 
+  
+  # Graph stacked bar plot
+  ggplot(aes(x = response, y = count, fill = gender)) +
+  
+  # A stacked bar graph allows easy comparisons between parties
+  # of proportion and they are more aesthetic than pi charts
+  geom_col(position = "fill") +
+  
+  # Label graph
+  labs(title = "Gender Percentage by Response",
+       subtitle = "More males vote for Republican than for others",
+       caption = "Source: NYT") +
+  xlab("Response") +
+  ylab("Percentage of Votes")
+```
+
