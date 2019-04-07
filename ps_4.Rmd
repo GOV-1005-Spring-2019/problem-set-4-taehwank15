@@ -1,5 +1,5 @@
 ---
-title: 'Problem Set #4'
+title: "An Analysis of NC's 9th Congressional District"
 author: "Taehwan Kim"
 date: "2/26/2019"
 output: html_document
@@ -100,14 +100,15 @@ table <- poll %>%
   mutate(Rep = Rep / all) %>% 
   mutate(Und = Und / all) %>% 
   select(-all) %>%
-  arrange(order(c("White","Black","Hispanic","Asian","Other")))
+  arrange(order(c("White","Black","Hispanic","Asian","Other"))) %>% 
+  ungroup()
 
 # Somehow it prints two lines for each line -- study halls were not able to help
 gt(table) %>%
   tab_header(title = "Voting by Race in North Carolina’s 9th Congressional District") %>%
-  tab_footnote(locations = cells_title(groups = "title"), footnote
-               = "Source: NYT") %>%
-  cols_label(Dem = "DEM.",
+  tab_source_note("Source: NYT") %>%
+  cols_label(race_eth = "Race",
+            Dem = "DEM.",
             Rep = "REP.",
             Und = "UND.") %>%
   fmt_percent(columns = vars(Dem, Rep, Und), decimals = 0) %>%
